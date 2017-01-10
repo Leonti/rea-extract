@@ -37,6 +37,11 @@ fileToProperties path = do
 
 main :: IO ()
 main = do
-    allFiles <- listFiles "2016-11-29"
+    allFiles <- listFiles "2017-1-10"
     allProperties <- mapM fileToProperties allFiles
     print allProperties
+
+singlePage :: IO ()
+singlePage = do
+    properties <- fileToProperties "/Users/leonti.bielski/reaResults/2017-1-10/list-1"
+    print properties

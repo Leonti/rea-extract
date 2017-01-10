@@ -17,6 +17,7 @@ data PropertyDetails = PropertyDetails  { bedrooms :: Maybe String
 
 data Property = Property        { details :: PropertyDetails
                                 , location :: String
+                                , link :: String
                                 , price :: Maybe String
                                 } deriving (Show)
 
@@ -37,12 +38,12 @@ parseListing listingTree =
         address :: String
         address = addressFromListingTree listingTree
 
-        details :: [(PropertyDetails, Maybe String)]
+        details :: [(PropertyDetails, Maybe String, String)]
         details = detailsFromListingTree listingTree
 
-        combineData :: (PropertyDetails, Maybe String) -> String -> Property
-        combineData (propertyDetails, maybePrice) address =
-            Property {details = propertyDetails, price = maybePrice, location = address}
+        combineData :: (PropertyDetails, Maybe String, String) -> String -> Property
+        combineData (propertyDetails, maybePrice, link) address =
+            Property {details = propertyDetails, price = maybePrice, link = link, location = address}
 
 addressFromListingTree :: TagTreePos String -> String
 addressFromListingTree listingTree =
@@ -54,22 +55,22 @@ addressFromListingTree listingTree =
         streetAddresses :: [String]
         streetAddresses = fmap streetFromAddressTree addressTrees
 
-detailsFromListingTree :: TagTreePos String -> [(PropertyDetails, Maybe String)]
+detailsFromListingTree :: TagTreePos String -> [(PropertyDetails, Maybe String, String)]
 detailsFromListingTree listingTree =
     extractedDetails
     where
         projectChildTrees :: [TagTreePos String]
         projectChildTrees = select (sel "div.project-child-listings") (content listingTree)
 
-        extractedDetails :: [(PropertyDetails, Maybe String)]
+        extractedDetails :: [(PropertyDetails, Maybe String, String)]
         extractedDetails = if not (null projectChildTrees) then
                 processProjectChildren $ head projectChildTrees
             else
                 [processSingleProperty listingTree]
 
-processSingleProperty :: TagTreePos String -> (PropertyDetails, Maybe String)
+processSingleProperty :: TagTreePos String -> (PropertyDetails, Maybe String, String)
 processSingleProperty propertyTree =
-    (propertyDetails, propertyPrice)
+    (propertyDetails, propertyPrice, propertyLink)
     where
         propertyDetails :: PropertyDetails
         propertyDetails = extractPropertyDetails propertyTree
@@ -77,25 +78,31 @@ processSingleProperty propertyTree =
         propertyPrice :: Maybe String
         propertyPrice = extractSinglePropertyPrice propertyTree
 
-processProjectChildren :: TagTreePos String -> [(PropertyDetails, Maybe String)]
+        propertyLink :: String
+        propertyLink = extractSinglePropertyLink propertyTree
+
+processProjectChildren :: TagTreePos String -> [(PropertyDetails, Maybe String, String)]
 processProjectChildren projectChildTree =
     processedProjectChildren
     where
         childrenTrees :: [TagTreePos String]
         childrenTrees = select (sel "div.child") (content projectChildTree)
 
-        processedProjectChildren :: [(PropertyDetails, Maybe String)]
+        processedProjectChildren :: [(PropertyDetails, Maybe String, String)]
         processedProjectChildren = fmap processProjectChild childrenTrees
 
-processProjectChild :: TagTreePos String -> (PropertyDetails, Maybe String)
+processProjectChild :: TagTreePos String -> (PropertyDetails, Maybe String, String)
 processProjectChild projectChild =
-    (propertyDetails, propertyPrice)
+    (propertyDetails, propertyPrice, propertyLink)
     where
         propertyDetails :: PropertyDetails
         propertyDetails = extractPropertyDetails projectChild
 
         propertyPrice :: Maybe String
         propertyPrice = extractProjectChildPrice projectChild
+
+        propertyLink :: String
+        propertyLink = extractProjectChildLink projectChild
 
 extractPrice :: String -> TagTreePos String -> Maybe String
 extractPrice selector tree =
@@ -112,6 +119,22 @@ extractProjectChildPrice = extractPrice ".price"
 
 extractSinglePropertyPrice :: TagTreePos String -> Maybe String
 extractSinglePropertyPrice = extractPrice ".priceText"
+
+extractProjectChildLink :: TagTreePos String -> String
+extractProjectChildLink projectChildTree = "project child link"
+
+extractSinglePropertyLink :: TagTreePos String -> String
+extractSinglePropertyLink tree =
+    fromAttrib "href" tagOpenA
+    where
+        linkTree :: [TagTreePos String]
+        linkTree = select (sel ".photoviewer a") (content tree)
+
+        tagOpenA :: Tag String
+        tagOpenA = head $ flattenTree [content $ head linkTree]
+
+extractHref :: Tag String -> String
+extractHref tagOpen = ""
 
 iconToValue :: [TagTreePos String] -> Maybe String
 iconToValue [] = Nothing
@@ -133,14 +156,6 @@ streetFromAddressTree addressTree =
     where
         tagList :: [Tag String]
         tagList = flattenTree [content addressTree]
-
-propertyFromListingTree :: TagTreePos String -> [Property]
-propertyFromListingTree listingTree =
-    []
-    where
-        propertyFeatures :: [TagTreePos String]
-        propertyFeatures = propertyFeaturesTree listingTree
-
 
 listings :: TagTree String -> [TagTreePos String]
 listings = select (sel "article.resultBody")
