@@ -9,6 +9,7 @@ import Data.List
 import Text.CSS3.Selectors.Parser
 import Text.HTML.TagSoup.Tree.Zipper
 import Text.CSS3.Selectors.Syntax
+import Data.Maybe
 
 data PropertyDetails = PropertyDetails  { bedrooms :: Maybe String
                                         , bathrooms :: Maybe String
@@ -121,7 +122,14 @@ extractSinglePropertyPrice :: TagTreePos String -> Maybe String
 extractSinglePropertyPrice = extractPrice ".priceText"
 
 extractProjectChildLink :: TagTreePos String -> String
-extractProjectChildLink projectChildTree = "project child link"
+extractProjectChildLink projectChildTree =
+    fromAttrib "href" tagOpenA
+    where
+        parentTree :: TagTreePos String
+        parentTree = fromJust $ parent projectChildTree
+
+        tagOpenA :: Tag String
+        tagOpenA = head $ flattenTree [content parentTree]
 
 extractSinglePropertyLink :: TagTreePos String -> String
 extractSinglePropertyLink tree =
@@ -148,7 +156,6 @@ extractPropertyDetails propertyTree =
         bedrooms = iconToValue $ select (sel ".rui-icon-bed") (content propertyTree)
         bathrooms = iconToValue $ select (sel ".rui-icon-bath") (content propertyTree)
         cars = iconToValue $ select (sel ".rui-icon-car") (content propertyTree)
-
 
 streetFromAddressTree :: TagTreePos String -> String
 streetFromAddressTree addressTree =
