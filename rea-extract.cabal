@@ -12,6 +12,19 @@ category:            Web
 build-type:          Simple
 cabal-version:       >=1.10
 
+library
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+  exposed-modules:     PriceParsing
+  build-depends:       base >= 4.7 && < 5
+                        , tagsoup == 0.13.10
+                        , HTTP == 4000.3.3
+                        , regex-tdfa == 1.2.2
+                        , time == 1.6.0.1
+                        , directory == 1.2.6.2
+                        , split == 0.2.3.1
+                        , tagsoup-selection == 0.1.0.1
+
 executable rea-extract
   hs-source-dirs:      src
   main-is:             Main.hs
@@ -24,3 +37,13 @@ executable rea-extract
                         , directory == 1.2.6.2
                         , split == 0.2.3.1
                         , tagsoup-selection == 0.1.0.1
+
+test-suite hspec
+  main-is: Spec.hs
+  type: exitcode-stdio-1.0
+  build-depends: base
+               , rea-extract
+               , hspec
+               , QuickCheck
+  hs-source-dirs: test
+  default-language: Haskell2010
