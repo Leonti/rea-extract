@@ -20,6 +20,7 @@ library
                         , tagsoup == 0.13.10
                         , HTTP == 4000.3.3
                         , regex-tdfa == 1.2.2
+                        , text == 1.2.2.1
                         , time == 1.6.0.1
                         , directory == 1.2.6.2
                         , split == 0.2.3.1
@@ -33,6 +34,7 @@ executable rea-extract
                         , tagsoup == 0.13.10
                         , HTTP == 4000.3.3
                         , regex-tdfa == 1.2.2
+                        , text == 1.2.2.1
                         , time == 1.6.0.1
                         , directory == 1.2.6.2
                         , split == 0.2.3.1

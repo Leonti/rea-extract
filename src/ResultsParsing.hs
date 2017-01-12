@@ -3,7 +3,6 @@ module ResultsParsing where
 import Text.HTML.TagSoup
 import Text.HTML.TagSoup.Tree
 import Text.HTML.TagSoup.Tree.Selection
-import Text.Regex.TDFA
 import Data.List.Split
 import Data.List
 import Text.CSS3.Selectors.Parser

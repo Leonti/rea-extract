@@ -22,4 +22,4 @@ spec =
     it "parses price with text and +" $
         parsePrice "Private Sale $280,000+" `shouldBe` Just 280000
     it "parses price with text after price" $
-        parsePrice "$490,000 Plus" `shouldBe` Just 490000        
+        parsePrice "$490,000 Plus" `shouldBe` Just 490000
