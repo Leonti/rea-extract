@@ -9,6 +9,7 @@ import Text.CSS3.Selectors.Parser
 import Text.HTML.TagSoup.Tree.Zipper
 import Text.CSS3.Selectors.Syntax
 import Data.Maybe
+import PriceParsing (parsePrice)
 
 data PropertyDetails = PropertyDetails  { bedrooms :: Maybe String
                                         , bathrooms :: Maybe String
@@ -18,7 +19,8 @@ data PropertyDetails = PropertyDetails  { bedrooms :: Maybe String
 data Property = Property        { details :: PropertyDetails
                                 , location :: String
                                 , link :: String
-                                , price :: Maybe String
+                                , price :: Maybe Int
+                                , priceAsText :: Maybe String
                                 } deriving (Show)
 
 parsePage :: String -> Maybe [Property]
@@ -42,8 +44,11 @@ parseListing listingTree =
         details = detailsFromListingTree listingTree
 
         combineData :: (PropertyDetails, Maybe String, String) -> String -> Property
-        combineData (propertyDetails, maybePrice, link) address =
-            Property {details = propertyDetails, price = maybePrice, link = link, location = address}
+        combineData (propertyDetails, maybePriceAsText, link) address =
+            Property {details = propertyDetails, priceAsText = maybePriceAsText, price = maybePrice, link = link, location = address}
+            where
+                maybePrice :: Maybe Int
+                maybePrice = maybePriceAsText >>= parsePrice 
 
 addressFromListingTree :: TagTreePos String -> String
 addressFromListingTree listingTree =
