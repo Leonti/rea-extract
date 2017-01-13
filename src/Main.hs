@@ -26,12 +26,12 @@ listFiles folder = do
     files <- listDirectory resultsFolder
     return $ fmap (\file -> resultsFolder ++ "/" ++ file) files
 
-fileToProperties :: FilePath -> IO (Maybe [Property])
+fileToProperties :: FilePath -> IO [Property]
 fileToProperties path = do
     handle <- openFile path ReadMode
     contents <- hGetContents handle
     let parsedProperties = parsePage contents
-    _ <- print $ length parsedProperties
+    _ <- print $ length parsedProperties -- force parsing before closing the file handle
     hClose handle
     return parsedProperties
 
@@ -39,7 +39,12 @@ main :: IO ()
 main = do
     allFiles <- listFiles "2017-1-10"
     allProperties <- mapM fileToProperties allFiles
-    print allProperties
+    let flattenedProperties = concat allProperties
+    _ <- print $ filter hasPrice flattenedProperties
+    print $ length $ filter hasPrice flattenedProperties
+
+hasPrice :: Property -> Bool
+hasPrice property = isJust (price property)
 
 singlePage :: IO ()
 singlePage = do

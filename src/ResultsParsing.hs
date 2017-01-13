@@ -23,9 +23,9 @@ data Property = Property        { details :: PropertyDetails
                                 , priceAsText :: Maybe String
                                 } deriving (Show)
 
-parsePage :: String -> Maybe [Property]
+parsePage :: String -> [Property]
 parsePage content =
-    maybeProperties
+    fromMaybe [] maybeProperties
     where
         tagTree = parseTree content
         maybeBodyTree = find hasListings tagTree
@@ -48,7 +48,7 @@ parseListing listingTree =
             Property {details = propertyDetails, priceAsText = maybePriceAsText, price = maybePrice, link = link, location = address}
             where
                 maybePrice :: Maybe Int
-                maybePrice = maybePriceAsText >>= parsePrice 
+                maybePrice = maybePriceAsText >>= parsePrice
 
 addressFromListingTree :: TagTreePos String -> String
 addressFromListingTree listingTree =
