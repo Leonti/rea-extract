@@ -9,21 +9,26 @@ import Text.CSS3.Selectors.Parser
 import Text.HTML.TagSoup.Tree.Zipper
 import Text.CSS3.Selectors.Syntax
 import Data.Maybe
+import Text.Read
 import PriceParsing (parsePrice)
 
-data PropertyDetails = PropertyDetails  { bedrooms :: Maybe String
-                                        , bathrooms :: Maybe String
-                                        , cars :: Maybe String
+data PropertyDetails = PropertyDetails  { bedroomsAsString :: Maybe String
+                                        , bathroomsAsString :: Maybe String
+                                        , carsAsString :: Maybe String
+                                        , bedrooms :: Int
+                                        , bathrooms :: Int
+                                        , cars :: Int
                                         } deriving (Show)
 
-data Property = Property        { details :: PropertyDetails
+data ParsedProperty = ParsedProperty
+                                { details :: PropertyDetails
                                 , location :: String
                                 , link :: String
                                 , price :: Maybe Int
                                 , priceAsText :: Maybe String
                                 } deriving (Show)
 
-parsePage :: String -> [Property]
+parsePage :: String -> [ParsedProperty]
 parsePage content =
     fromMaybe [] maybeProperties
     where
@@ -33,7 +38,7 @@ parsePage content =
         maybeProperties = fmap (concatMap parseListing) maybeListingTrees
 
 
-parseListing :: TagTreePos String -> [Property]
+parseListing :: TagTreePos String -> [ParsedProperty]
 parseListing listingTree =
     fmap (`combineData` address) details
     where
@@ -43,9 +48,15 @@ parseListing listingTree =
         details :: [(PropertyDetails, Maybe String, String)]
         details = detailsFromListingTree listingTree
 
-        combineData :: (PropertyDetails, Maybe String, String) -> String -> Property
+        combineData :: (PropertyDetails, Maybe String, String) -> String -> ParsedProperty
         combineData (propertyDetails, maybePriceAsText, link) address =
-            Property {details = propertyDetails, priceAsText = maybePriceAsText, price = maybePrice, link = link, location = address}
+            ParsedProperty
+                { details = propertyDetails
+                , priceAsText = maybePriceAsText
+                , price = maybePrice
+                , link = link
+                , location = address
+            }
             where
                 maybePrice :: Maybe Int
                 maybePrice = maybePriceAsText >>= parsePrice
@@ -155,11 +166,31 @@ iconToValue (x:xs) =
 
 extractPropertyDetails :: TagTreePos String -> PropertyDetails
 extractPropertyDetails propertyTree =
-    PropertyDetails {bedrooms = bedrooms, bathrooms = bathrooms, cars = cars}
+    PropertyDetails
+        { bedroomsAsString = bedroomsAsString
+        , bathroomsAsString = bathroomsAsString
+        , carsAsString = carsAsString
+        , bedrooms = detailToInt bedroomsAsString
+        , bathrooms = detailToInt bathroomsAsString
+        , cars = detailToInt carsAsString
+        }
     where
-        bedrooms = iconToValue $ select (sel ".rui-icon-bed") (content propertyTree)
-        bathrooms = iconToValue $ select (sel ".rui-icon-bath") (content propertyTree)
-        cars = iconToValue $ select (sel ".rui-icon-car") (content propertyTree)
+        bedroomsAsString = iconToValue $ select (sel ".rui-icon-bed") (content propertyTree)
+        bathroomsAsString = iconToValue $ select (sel ".rui-icon-bath") (content propertyTree)
+        carsAsString = iconToValue $ select (sel ".rui-icon-car") (content propertyTree)
+
+detailToInt :: Maybe String -> Int
+detailToInt maybeDetail =
+    maybeToInt maybeIntDetail
+    where
+        detailToMaybeInt :: String -> Maybe Int
+        detailToMaybeInt = readMaybe
+
+        maybeIntDetail = maybeDetail >>= detailToMaybeInt
+
+        maybeToInt :: Maybe Int -> Int
+        maybeToInt (Just detail) = detail
+        maybeToInt Nothing = 0
 
 streetFromAddressTree :: TagTreePos String -> String
 streetFromAddressTree addressTree =
