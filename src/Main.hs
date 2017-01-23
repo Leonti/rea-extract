@@ -15,6 +15,7 @@ import Data.Time.Calendar
 
 import Data.List.Split
 
+import System.Environment
 import System.Directory
 
 import ResultsParsing
@@ -103,17 +104,25 @@ openURL x = getResponseBody =<< simpleHTTP (getRequest x)
 
 geocodeAddresses :: [String] -> IO (Maybe [Maybe LatLng])
 geocodeAddresses addresses = do
-    geocodeResponse <- openURL $ mapQuestUrl "g8ovkvRh4q4HHX8BQ6oeqQJlMblgMfq9" addresses
+    mapQuestKey <- getEnv "MAP_QUEST_KEY"
+    geocodeResponse <- openURL $ mapQuestUrl mapQuestKey addresses
 --    _ <- print "doing mapQuestRequest"
 --    _ <- print (length addresses)
     return $ geocodeResponseToResults geocodeResponse
 
-readGeocoding :: IO ()
-readGeocoding = do
-    geocoding <- openURL $ mapQuestUrl "g8ovkvRh4q4HHX8BQ6oeqQJlMblgMfq9" [location1, location2, "sadsniuhuygxw"]
+-- "g8ovkvRh4q4HHX8BQ6oeqQJlMblgMfq9"
+
+checkEnvironment :: IO ()
+checkEnvironment = do
+    mapQuestKey <- getEnv "MAP_QUEST_KEY"
+    print mapQuestKey
+
+--readGeocoding :: IO ()
+--readGeocoding = do
+--    geocoding <- openURL $ mapQuestUrl "g8ovkvRh4q4HHX8BQ6oeqQJlMblgMfq9" [location1, location2, "sadsniuhuygxw"]
 --    geocoding <- readFile "/Users/leonti.bielski/geocoding_response"
-    let parsedGeocoding = geocodeResponseToResults geocoding
-    print parsedGeocoding
+--    let parsedGeocoding = geocodeResponseToResults geocoding
+--    print parsedGeocoding
 
 --dbTest :: IO ()
 --dbTest = do
