@@ -21,7 +21,7 @@ echo "$subject"
 
 curl -s --user 'api:'$MAILGUN_API_KEY \
     https://api.mailgun.net/v3/leonti.me/messages \
-    -F from='REA Extract <leonti@leonti.me>' \
+    -F from='REA Extract <prishelec@gmail.com>' \
     -F to=prishelec@gmail.com \
     -F subject="$subject" \
     -F text="$content"
