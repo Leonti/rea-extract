@@ -2,18 +2,19 @@
 
 cd /root/reaResults
 
-for i in */; do
-    unzip -r "$i"
+for i in *; do
+    unzip "$i"
     rm "$i"
 done
 
-aws s3 cp s3://leonti-rea-crawler/properties.db /root/reaResults/properties.db
+aws s3 cp s3://leonti-rea-crawler/properties.db /root/properties.db
 
-./rea-extract > output.txt
+cd /root
+./rea-extract > output.txt 2>&1
 
-aws s3 cp /root/reaResults/properties.db s3://leonti-rea-crawler/properties.db
+aws s3 cp /root/properties.db s3://leonti-rea-crawler/properties.db
 
-content=(cat output.txt)
+content=$(cat output.txt)
 subject="REA Extract results "$(date +"%Y.%m.%d")
 
 echo "$content"
