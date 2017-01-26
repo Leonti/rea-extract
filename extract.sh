@@ -14,7 +14,9 @@ cd /root
 
 aws s3 cp /root/properties.db s3://leonti-rea-crawler/properties.db
 
-content=$(cat output.txt)
+output=$(cat output.txt)
+
+content=$'New properties have been extracted:\n\n'$output
 subject="REA Extract results "$(date +"%Y.%m.%d")
 
 echo "$content"
