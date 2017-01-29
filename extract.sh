@@ -10,7 +10,7 @@ done
 aws s3 cp s3://leonti-rea-crawler/properties.db /root/properties.db
 
 cd /root
-./rea-extract > output.txt 2>&1
+./rea-extract |& tee output.txt
 
 aws s3 cp /root/properties.db s3://leonti-rea-crawler/properties.db
 

@@ -13,7 +13,7 @@ import Control.Monad
 import Data.Time.Clock
 import Data.Time.Calendar
 
-import Data.List.Split
+--import Data.List.Split
 
 import System.Environment
 import System.Directory
@@ -23,6 +23,9 @@ import Geocoding
 import DbStore
 
 import Database.SQLite.Simple
+
+import Streaming
+import qualified Streaming.Prelude as S
 
 listFiles :: String -> IO [FilePath]
 listFiles folder = do
@@ -36,16 +39,21 @@ fileToProperties path = do
     contents <- readFile path
     return $ parsePage contents
 
-propertiesWithGeocoding :: [ParsedProperty] -> IO [(ParsedProperty, Maybe LatLng)]
-propertiesWithGeocoding properties = do
-    let addresses = propertiesToAddresses properties
-    let batchAddresses = chunksOf 100 addresses
-    batchGeocodedLocations <- mapM geocodeAddresses batchAddresses
-    let geocodedLocations = fromJust $ concat <$> sequence batchGeocodedLocations
-    return (zip properties geocodedLocations)
+--propertiesWithGeocoding :: [ParsedProperty] -> IO [(ParsedProperty, Maybe LatLng)]
+--propertiesWithGeocoding properties = do
+--    let batchProperties = chunksOf 100 properties
+--    batchGeocodedLocations <- mapM geocodeAddresses batchProperties
+--    let geocodedLocations = fromJust $ concat <$> sequence batchGeocodedLocations
+--    return geocodedLocations
 
-propertiesToAddresses :: [ParsedProperty] -> [String]
-propertiesToAddresses = fmap location
+propertiesWithGeocoding
+  :: Stream (Of ParsedProperty) IO r
+     -> Stream (Of (ParsedProperty, Maybe LatLng)) IO r
+propertiesWithGeocoding properties = do
+    let batchProperties = S.mapped S.toList $ chunksOf 100 properties
+    S.concat $ S.concat $ S.mapM geocodeAddresses batchProperties
+    -- concat here flattens a stream of lists of as into a stream of as
+    -- and a stream of maybe as into a stream of as
 
 main :: IO ()
 main = do
@@ -57,19 +65,29 @@ main = do
 processDate :: String -> IO ()
 processDate date = do
     allFiles <- listFiles date
-    allProperties <- mapM fileToProperties allFiles
-    let flattenedPropertiesWithPrice = filter hasPrice $ concat allProperties
-    conn <- open "properties.db"
-    existingProperties <- query_ conn propertyRowSelectAllQuery :: IO [PropertyRow]
-    let newFlattenedPropertiesWithPrice = filter (notYetInserted date existingProperties) flattenedPropertiesWithPrice
-    geocodedProperties <- propertiesWithGeocoding newFlattenedPropertiesWithPrice
-    let validProperties = filter hasGeocoding geocodedProperties
-    mapM_ (execute conn propertyRowInsertQuery . createPropertyRow date) validProperties
-    propertyRows <- query_ conn propertyRowSelectAllQuery :: IO [PropertyRow]
+    let allProperties = S.mapM fileToProperties $ S.each allFiles
+    let flattenedPropertiesWithPrice = S.filter hasPrice $ S.concat allProperties
+    S.print $  propertiesWithGeocoding flattenedPropertiesWithPrice
+
+--processDate :: String -> IO ()
+--processDate date = do
+--    allFiles <- listFiles date
+--    allProperties <- mapM fileToProperties allFiles
+--    let flattenedPropertiesWithPrice = filter hasPrice $ concat allProperties
+--    conn <- open "properties.db"
+--    existingProperties <- query_ conn propertyRowSelectAllQuery :: IO [PropertyRow]
+--    let newFlattenedPropertiesWithPrice = filter (notYetInserted date existingProperties) flattenedPropertiesWithPrice
+--    print (fmap location newFlattenedPropertiesWithPrice)
+--    geocodedProperties <- propertiesWithGeocoding newFlattenedPropertiesWithPrice
+--    let validProperties = filter hasGeocoding geocodedProperties
+--    print geocodedProperties
+
+--    mapM_ (execute conn propertyRowInsertQuery . createPropertyRow date) validProperties
+--    propertyRows <- query_ conn propertyRowSelectAllQuery :: IO [PropertyRow]
 --    mapM_ print propertyRows
 --    _ <- print (Prelude.length propertyRows)
-    Database.SQLite.Simple.close conn
-    print $ date ++ ": " ++ show (Prelude.length validProperties)
+--    Database.SQLite.Simple.close conn
+--    print $ date ++ ": " ++ show (Prelude.length validProperties)
 
 notYetInserted :: String -> [PropertyRow] -> ParsedProperty -> Bool
 notYetInserted date existingProperties parsedProperty =
@@ -89,45 +107,12 @@ hasPrice property = isJust (price property)
 hasGeocoding :: (ParsedProperty, Maybe LatLng) -> Bool
 hasGeocoding (property, geocodedLocation) = isJust geocodedLocation
 
-singlePage :: IO ()
-singlePage = do
-    properties <- fileToProperties "/Users/leonti.bielski/reaResults/2017-1-10/list-1"
-    geocodedProperties <- propertiesWithGeocoding properties
-    print geocodedProperties
-
-
-location1 = "280 Albert Street, East Melbourne, Vic 3002"
-location2 = "G21/8 Garfield Street, Richmond, Vic 3121"
-
 openURL :: String -> IO String
 openURL x = getResponseBody =<< simpleHTTP (getRequest x)
 
-geocodeAddresses :: [String] -> IO (Maybe [Maybe LatLng])
-geocodeAddresses addresses = do
+geocodeAddresses :: [ParsedProperty] -> IO (Maybe [(ParsedProperty, Maybe LatLng)])
+geocodeAddresses properties = do
+    let addresses = fmap location properties
     mapQuestKey <- getEnv "MAP_QUEST_KEY"
     geocodeResponse <- openURL $ mapQuestUrl mapQuestKey addresses
---    _ <- print "doing mapQuestRequest"
---    _ <- print (length addresses)
-    return $ geocodeResponseToResults geocodeResponse
-
--- "g8ovkvRh4q4HHX8BQ6oeqQJlMblgMfq9"
-
-checkEnvironment :: IO ()
-checkEnvironment = do
-    mapQuestKey <- getEnv "MAP_QUEST_KEY"
-    print mapQuestKey
-
---readGeocoding :: IO ()
---readGeocoding = do
---    geocoding <- openURL $ mapQuestUrl "g8ovkvRh4q4HHX8BQ6oeqQJlMblgMfq9" [location1, location2, "sadsniuhuygxw"]
---    geocoding <- readFile "/Users/leonti.bielski/geocoding_response"
---    let parsedGeocoding = geocodeResponseToResults geocoding
---    print parsedGeocoding
-
---dbTest :: IO ()
---dbTest = do
---    conn <- open "properties.db"
---    execute conn propertyRowInsertQuery (PropertyRow "url" "2017-1-10" 1 1 1 "Street number" 399000 (-37.45) 144.2)
---    r <- query_ conn propertyRowSelectAllQuery :: IO [PropertyRow]
---    mapM_ print r
---    Database.SQLite.Simple.close conn
+    return $ fmap (zip properties) (geocodeResponseToResults geocodeResponse)
