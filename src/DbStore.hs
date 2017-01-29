@@ -28,6 +28,9 @@ propertyRowInsertQuery = "INSERT INTO properties (link, date, bedrooms, bathroom
 propertyRowSelectAllQuery :: Query
 propertyRowSelectAllQuery = "SELECT * from properties"
 
+propertiesForDate :: Query
+propertiesForDate = "SELECT * from properties where date=?"
+
 toPropertyRow :: String -> (ParsedProperty, LatLng) -> PropertyRow
 toPropertyRow date (p, latLng) =
     PropertyRow (link p) date pBedrooms pBathrooms pCars (location p) propertyPrice (lat latLng) (lng latLng)

@@ -13,8 +13,6 @@ import Control.Monad
 import Data.Time.Clock
 import Data.Time.Calendar
 
---import Data.List.Split
-
 import System.Environment
 import System.Directory
 
@@ -39,13 +37,6 @@ fileToProperties path = do
     contents <- readFile path
     return $ parsePage contents
 
---propertiesWithGeocoding :: [ParsedProperty] -> IO [(ParsedProperty, Maybe LatLng)]
---propertiesWithGeocoding properties = do
---    let batchProperties = chunksOf 100 properties
---    batchGeocodedLocations <- mapM geocodeAddresses batchProperties
---    let geocodedLocations = fromJust $ concat <$> sequence batchGeocodedLocations
---    return geocodedLocations
-
 propertiesWithGeocoding
   :: Stream (Of ParsedProperty) IO r
      -> Stream (Of (ParsedProperty, Maybe LatLng)) IO r
@@ -67,27 +58,14 @@ processDate date = do
     allFiles <- listFiles date
     let allProperties = S.mapM fileToProperties $ S.each allFiles
     let flattenedPropertiesWithPrice = S.filter hasPrice $ S.concat allProperties
-    S.print $  propertiesWithGeocoding flattenedPropertiesWithPrice
-
---processDate :: String -> IO ()
---processDate date = do
---    allFiles <- listFiles date
---    allProperties <- mapM fileToProperties allFiles
---    let flattenedPropertiesWithPrice = filter hasPrice $ concat allProperties
---    conn <- open "properties.db"
---    existingProperties <- query_ conn propertyRowSelectAllQuery :: IO [PropertyRow]
---    let newFlattenedPropertiesWithPrice = filter (notYetInserted date existingProperties) flattenedPropertiesWithPrice
---    print (fmap location newFlattenedPropertiesWithPrice)
---    geocodedProperties <- propertiesWithGeocoding newFlattenedPropertiesWithPrice
---    let validProperties = filter hasGeocoding geocodedProperties
---    print geocodedProperties
-
---    mapM_ (execute conn propertyRowInsertQuery . createPropertyRow date) validProperties
---    propertyRows <- query_ conn propertyRowSelectAllQuery :: IO [PropertyRow]
---    mapM_ print propertyRows
---    _ <- print (Prelude.length propertyRows)
---    Database.SQLite.Simple.close conn
---    print $ date ++ ": " ++ show (Prelude.length validProperties)
+    conn <- open "properties.db"
+    existingProperties <- query_ conn propertyRowSelectAllQuery :: IO [PropertyRow]
+    let newFlattenedPropertiesWithPrice = S.filter (notYetInserted date existingProperties) flattenedPropertiesWithPrice
+    let geocodedProperties = S.filter hasGeocoding (propertiesWithGeocoding newFlattenedPropertiesWithPrice)
+    S.mapM_ (execute conn propertyRowInsertQuery . createPropertyRow date) geocodedProperties
+    insertedProperties <- query conn propertiesForDate (Only date) :: IO [PropertyRow]
+    Database.SQLite.Simple.close conn
+    print $ date ++ ": " ++ show (Prelude.length insertedProperties)
 
 notYetInserted :: String -> [PropertyRow] -> ParsedProperty -> Bool
 notYetInserted date existingProperties parsedProperty =
@@ -109,6 +87,12 @@ hasGeocoding (property, geocodedLocation) = isJust geocodedLocation
 
 openURL :: String -> IO String
 openURL x = getResponseBody =<< simpleHTTP (getRequest x)
+
+geocodeAddressesFake :: [ParsedProperty] -> IO (Maybe [(ParsedProperty, Maybe LatLng)])
+geocodeAddressesFake properties = do
+    _ <- print "Fake geocoding"
+    let fakeGeocoding = fmap (\p -> Just LatLng {lat = 1, lng =2}) properties
+    return $ Just (zip properties fakeGeocoding)
 
 geocodeAddresses :: [ParsedProperty] -> IO (Maybe [(ParsedProperty, Maybe LatLng)])
 geocodeAddresses properties = do
