@@ -82,8 +82,18 @@ createPropertyRow date (parsedProperty, maybeLatLng) =
 hasPrice :: ParsedProperty -> Bool
 hasPrice property = isJust (price property)
 
+--144.95143536,-37.8555269395,144.990094688,-37.799716676
+
 hasGeocoding :: (ParsedProperty, Maybe LatLng) -> Bool
-hasGeocoding (property, geocodedLocation) = isJust geocodedLocation
+hasGeocoding (_, Just coordinates) = isInMelbourne coordinates
+hasGeocoding (_, Nothing) = False
+
+isInMelbourne :: LatLng -> Bool
+isInMelbourne coordinates =
+    (pLat > -37.8555269395) && (pLat < -37.799716676) && (pLng > 144.95143536) && (pLng < 144.990094688)
+    where
+        pLat = lat coordinates
+        pLng = lng coordinates
 
 openURL :: String -> IO String
 openURL x = getResponseBody =<< simpleHTTP (getRequest x)
@@ -96,7 +106,13 @@ geocodeAddressesFake properties = do
 
 geocodeAddresses :: [ParsedProperty] -> IO (Maybe [(ParsedProperty, Maybe LatLng)])
 geocodeAddresses properties = do
-    let addresses = fmap location properties
+    let addresses = fmap (++ ", Australia") $ fmap location properties
     mapQuestKey <- getEnv "MAP_QUEST_KEY"
     geocodeResponse <- openURL $ mapQuestUrl mapQuestKey addresses
-    return $ fmap (zip properties) (geocodeResponseToResults geocodeResponse)
+    let geocodeResults = (geocodeResponseToResults geocodeResponse)
+    _ <- printGeocoded geocodeResponse geocodeResults
+    return $ fmap (zip properties) geocodeResults
+
+printGeocoded :: String -> Maybe [Maybe LatLng] -> IO()
+printGeocoded response (Just results) = print $ "Got " ++ (show $ length results) ++ " geocoded results"
+printGeocoded response Nothing = print $ "Geocoding error " ++ response
