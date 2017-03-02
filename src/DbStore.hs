@@ -25,9 +25,6 @@ instance ToRow PropertyRow where
 propertyRowInsertQuery :: Query
 propertyRowInsertQuery = "INSERT INTO properties (link, date, bedrooms, bathrooms, cars, location, price, lat, lng) VALUES (?,?,?,?,?,?,?,?,?)"
 
-propertyRowSelectAllQuery :: Query
-propertyRowSelectAllQuery = "SELECT * from properties"
-
 propertiesForDate :: Query
 propertiesForDate = "SELECT * from properties where date=?"
 

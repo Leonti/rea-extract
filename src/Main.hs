@@ -59,21 +59,21 @@ processDate date = do
     let allProperties = S.mapM fileToProperties $ S.each allFiles
     let flattenedPropertiesWithPrice = S.filter hasPrice $ S.concat allProperties
     conn <- open "properties.db"
-    existingProperties <- query_ conn propertyRowSelectAllQuery :: IO [PropertyRow]
-    let newFlattenedPropertiesWithPrice = S.filter (notYetInserted date existingProperties) flattenedPropertiesWithPrice
+    existingProperties <- query conn propertiesForDate (Only date) :: IO [PropertyRow]
+    let newFlattenedPropertiesWithPrice = S.filter (notYetInserted existingProperties) flattenedPropertiesWithPrice
     let geocodedProperties = S.filter hasGeocoding (propertiesWithGeocoding newFlattenedPropertiesWithPrice)
     S.mapM_ (execute conn propertyRowInsertQuery . createPropertyRow date) geocodedProperties
     insertedProperties <- query conn propertiesForDate (Only date) :: IO [PropertyRow]
     Database.SQLite.Simple.close conn
     print $ date ++ ": " ++ show (Prelude.length insertedProperties)
 
-notYetInserted :: String -> [PropertyRow] -> ParsedProperty -> Bool
-notYetInserted date existingProperties parsedProperty =
+notYetInserted :: [PropertyRow] -> ParsedProperty -> Bool
+notYetInserted existingProperties parsedProperty =
     not $ any isInserted existingProperties
     where
         isInserted :: PropertyRow -> Bool
-        isInserted (PropertyRow existingLink existingDate _ _ _ _ _ _ _) =
-            existingLink == link parsedProperty && existingDate == date
+        isInserted (PropertyRow existingLink _ _ _ _ _ _ _ _) =
+            existingLink == link parsedProperty
 
 createPropertyRow :: String -> (ParsedProperty, Maybe LatLng) -> PropertyRow
 createPropertyRow date (parsedProperty, maybeLatLng) =
@@ -106,13 +106,13 @@ geocodeAddressesFake properties = do
 
 geocodeAddresses :: [ParsedProperty] -> IO (Maybe [(ParsedProperty, Maybe LatLng)])
 geocodeAddresses properties = do
-    let addresses = fmap (++ ", Australia") $ fmap location properties
+    let addresses = fmap ((++ ", Australia") . location) properties
     mapQuestKey <- getEnv "MAP_QUEST_KEY"
     geocodeResponse <- openURL $ mapQuestUrl mapQuestKey addresses
-    let geocodeResults = (geocodeResponseToResults geocodeResponse)
+    let geocodeResults = geocodeResponseToResults geocodeResponse
     _ <- printGeocoded geocodeResponse geocodeResults
     return $ fmap (zip properties) geocodeResults
 
 printGeocoded :: String -> Maybe [Maybe LatLng] -> IO()
-printGeocoded response (Just results) = print $ "Got " ++ (show $ length results) ++ " geocoded results"
+printGeocoded response (Just results) = print $ "Got " ++ show (length results) ++ " geocoded results"
 printGeocoded response Nothing = print $ "Geocoding error " ++ response
