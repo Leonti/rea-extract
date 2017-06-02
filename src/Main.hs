@@ -16,7 +16,9 @@ import Data.Time.Calendar
 import System.Environment
 import System.Directory
 
+import Models
 import ResultsParsing
+import SoldResultsParsing
 import Geocoding
 import DbStore
 
@@ -45,6 +47,13 @@ propertiesWithGeocoding properties = do
     S.concat $ S.concat $ S.mapM geocodeAddresses batchProperties
     -- concat here flattens a stream of lists of as into a stream of as
     -- and a stream of maybe as into a stream of as
+
+parseSingleSoldPage :: IO ()
+parseSingleSoldPage = do
+    homeDirectory <- getHomeDirectory
+    contents <- readFile $ homeDirectory ++ "/reaSoldResults/2017-4-20/list-1"
+    let soldResults = parseSoldPage contents
+    print $ show soldResults
 
 main :: IO ()
 main = do

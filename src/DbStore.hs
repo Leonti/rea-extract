@@ -2,7 +2,7 @@
 
 module DbStore where
 
-import ResultsParsing
+import Models
 import Geocoding
 import Data.Maybe
 import Database.SQLite.Simple

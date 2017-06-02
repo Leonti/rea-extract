@@ -28,6 +28,8 @@ library
                         , sqlite-simple == 0.4.12.1
                         , split == 0.2.3.1
                         , tagsoup-selection == 0.1.0.1
+                        , MissingH == 1.4.0.1
+                        , strptime == 1.0.10
                         , streaming == 0.1.4.3
 
 executable rea-extract
@@ -50,6 +52,8 @@ executable rea-extract
                         , sqlite-simple == 0.4.12.1
                         , split == 0.2.3.1
                         , tagsoup-selection == 0.1.0.1
+                        , MissingH == 1.4.0.1
+                        , strptime == 1.0.10
                         , streaming == 0.1.4.3
 
 test-suite hspec

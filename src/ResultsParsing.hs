@@ -11,22 +11,8 @@ import Text.CSS3.Selectors.Syntax
 import Data.Maybe
 import Text.Read
 import PriceParsing (parsePrice)
-
-data PropertyDetails = PropertyDetails  { bedroomsAsString :: Maybe String
-                                        , bathroomsAsString :: Maybe String
-                                        , carsAsString :: Maybe String
-                                        , bedrooms :: Int
-                                        , bathrooms :: Int
-                                        , cars :: Int
-                                        } deriving (Show)
-
-data ParsedProperty = ParsedProperty
-                                { details :: PropertyDetails
-                                , location :: String
-                                , link :: String
-                                , price :: Maybe Int
-                                , priceAsText :: Maybe String
-                                } deriving (Show)
+import Models
+import ParsingUtils
 
 parsePage :: String -> [ParsedProperty]
 parsePage content =
@@ -70,6 +56,26 @@ addressFromListingTree listingTree =
 
         streetAddresses :: [String]
         streetAddresses = fmap streetFromAddressTree addressTrees
+
+extractPropertyDetails :: TagTreePos String -> PropertyDetails
+extractPropertyDetails propertyTree =
+    PropertyDetails
+        { bedroomsAsString = bedroomsAsString
+        , bathroomsAsString = bathroomsAsString
+        , carsAsString = carsAsString
+        , bedrooms = detailToInt bedroomsAsString
+        , bathrooms = detailToInt bathroomsAsString
+        , cars = detailToInt carsAsString
+        }
+    where
+        bedroomsAsString = iconToValue $ select (sel ".rui-icon-bed") (content propertyTree)
+        bathroomsAsString = iconToValue $ select (sel ".rui-icon-bath") (content propertyTree)
+        carsAsString = iconToValue $ select (sel ".rui-icon-car") (content propertyTree)
+
+iconToValue :: [TagTreePos String] -> Maybe String
+iconToValue [] = Nothing
+iconToValue (x:xs) =
+    Just $ innerText $ flattenTree [Text.HTML.TagSoup.Tree.Zipper.after x !! 1]
 
 detailsFromListingTree :: TagTreePos String -> [(PropertyDetails, Maybe String, String)]
 detailsFromListingTree listingTree =
@@ -120,16 +126,6 @@ processProjectChild projectChild =
         propertyLink :: String
         propertyLink = extractProjectChildLink projectChild
 
-extractPrice :: String -> TagTreePos String -> Maybe String
-extractPrice selector tree =
-    if not (null priceTree) then
-        Just $ innerText $ flattenTree [content $ head priceTree]
-    else
-        Nothing
-    where
-        priceTree :: [TagTreePos String]
-        priceTree = select (sel selector) (content tree)
-
 extractProjectChildPrice :: TagTreePos String -> Maybe String
 extractProjectChildPrice = extractPrice ".price"
 
@@ -158,39 +154,6 @@ extractSinglePropertyLink tree =
 
 extractHref :: Tag String -> String
 extractHref tagOpen = ""
-
-iconToValue :: [TagTreePos String] -> Maybe String
-iconToValue [] = Nothing
-iconToValue (x:xs) =
-    Just $ innerText $ flattenTree [Text.HTML.TagSoup.Tree.Zipper.after x !! 1]
-
-extractPropertyDetails :: TagTreePos String -> PropertyDetails
-extractPropertyDetails propertyTree =
-    PropertyDetails
-        { bedroomsAsString = bedroomsAsString
-        , bathroomsAsString = bathroomsAsString
-        , carsAsString = carsAsString
-        , bedrooms = detailToInt bedroomsAsString
-        , bathrooms = detailToInt bathroomsAsString
-        , cars = detailToInt carsAsString
-        }
-    where
-        bedroomsAsString = iconToValue $ select (sel ".rui-icon-bed") (content propertyTree)
-        bathroomsAsString = iconToValue $ select (sel ".rui-icon-bath") (content propertyTree)
-        carsAsString = iconToValue $ select (sel ".rui-icon-car") (content propertyTree)
-
-detailToInt :: Maybe String -> Int
-detailToInt maybeDetail =
-    maybeToInt maybeIntDetail
-    where
-        detailToMaybeInt :: String -> Maybe Int
-        detailToMaybeInt = readMaybe
-
-        maybeIntDetail = maybeDetail >>= detailToMaybeInt
-
-        maybeToInt :: Maybe Int -> Int
-        maybeToInt (Just detail) = detail
-        maybeToInt Nothing = 0
 
 streetFromAddressTree :: TagTreePos String -> String
 streetFromAddressTree addressTree =
