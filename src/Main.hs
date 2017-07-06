@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Main where
 
 import Data.Char
@@ -6,6 +8,7 @@ import Text.HTML.TagSoup
 import Text.Regex.TDFA
 import Data.Maybe
 import Control.Concurrent
+import Data.Text
 
 import System.IO
 import Control.Monad
@@ -26,11 +29,12 @@ import Database.SQLite.Simple
 
 import Streaming
 import qualified Streaming.Prelude as S
+import qualified Database.MongoDB as Mongo
 
 listFiles :: String -> IO [FilePath]
 listFiles folder = do
     homeDirectory <- getHomeDirectory
-    let resultsFolder = homeDirectory ++ "/reaResults/" ++ folder
+    let resultsFolder = homeDirectory ++ folder
     files <- listDirectory resultsFolder
     return $ fmap (\file -> resultsFolder ++ "/" ++ file) files
 
@@ -39,14 +43,10 @@ fileToProperties path = do
     contents <- readFile path
     return $ parsePage contents
 
-propertiesWithGeocoding
-  :: Stream (Of ParsedProperty) IO r
-     -> Stream (Of (ParsedProperty, Maybe LatLng)) IO r
-propertiesWithGeocoding properties = do
-    let batchProperties = S.mapped S.toList $ chunksOf 100 properties
-    S.concat $ S.concat $ S.mapM geocodeAddresses batchProperties
-    -- concat here flattens a stream of lists of as into a stream of as
-    -- and a stream of maybe as into a stream of as
+soldFileToProperties :: FilePath -> IO [SoldParsedProperty]
+soldFileToProperties path = do
+    contents <- readFile path
+    return $ parseSoldPage contents
 
 parseSingleSoldPage :: IO ()
 parseSingleSoldPage = do
@@ -58,70 +58,61 @@ parseSingleSoldPage = do
 main :: IO ()
 main = do
     homeDirectory <- getHomeDirectory
-    let reaResultsFolder = homeDirectory ++ "/reaResults"
-    dates <- listDirectory reaResultsFolder
-    sequence_ $ fmap processDate dates
+    dates <- listDirectory $ homeDirectory ++ "/reaResults"
+    soldDates <- listDirectory $ homeDirectory ++ "/reaSoldResults"
+    _ <- sequence_ $ fmap processDate dates
+    _ <- sequence_ $ fmap processSoldPropertiesDate soldDates
+    print "Done"
 
 processDate :: String -> IO ()
 processDate date = do
-    allFiles <- listFiles date
+    allFiles <- listFiles $ "/reaResults/" ++ date
     let allProperties = S.mapM fileToProperties $ S.each allFiles
     let flattenedPropertiesWithPrice = S.filter hasPrice $ S.concat allProperties
-    conn <- open "properties.db"
-    existingProperties <- query conn propertiesForDate (Only date) :: IO [PropertyRow]
-    let newFlattenedPropertiesWithPrice = S.filter (notYetInserted existingProperties) flattenedPropertiesWithPrice
-    let geocodedProperties = S.filter hasGeocoding (propertiesWithGeocoding newFlattenedPropertiesWithPrice)
-    S.mapM_ (execute conn propertyRowInsertQuery . createPropertyRow date) geocodedProperties
-    insertedProperties <- query conn propertiesForDate (Only date) :: IO [PropertyRow]
-    Database.SQLite.Simple.close conn
-    print $ date ++ ": " ++ show (Prelude.length insertedProperties)
+    pipe <- getAuthenticatedMongoPipe
+    let insertActions = S.map (insertSingleAction date) flattenedPropertiesWithPrice
+    S.mapM_ (runMongoAction pipe) insertActions
+    Mongo.close pipe
+    print $ "Finished date " ++ date
 
-notYetInserted :: [PropertyRow] -> ParsedProperty -> Bool
-notYetInserted existingProperties parsedProperty =
-    not $ any isInserted existingProperties
-    where
-        isInserted :: PropertyRow -> Bool
-        isInserted (PropertyRow existingLink _ _ _ _ _ _ _ _) =
-            existingLink == link parsedProperty
+getAuthenticatedMongoPipe :: IO Mongo.Pipe
+getAuthenticatedMongoPipe = do
+    mongoHostPort <- getEnv "MONGO_HOST_PORT"
+    mongoDb <- getEnv "MONGO_DB"
+    mongoUsername <- getEnv "MONGO_USERNAME"
+    mongoPassword <- getEnv "MONGO_PASSWORD"
+    pipe <- Mongo.connect (Mongo.readHostPort mongoHostPort)
+    _ <- Mongo.access pipe Mongo.UnconfirmedWrites (pack mongoDb) $ Mongo.auth (pack mongoUsername) (pack mongoPassword)
+    return pipe
 
-createPropertyRow :: String -> (ParsedProperty, Maybe LatLng) -> PropertyRow
-createPropertyRow date (parsedProperty, maybeLatLng) =
-    toPropertyRow date (parsedProperty, fromJust maybeLatLng)
+runMongoAction :: Mongo.Pipe -> Mongo.Action IO () -> IO ()
+runMongoAction pipe action = do
+    mongoDb <- getEnv "MONGO_DB"
+    e <- Mongo.access pipe Mongo.UnconfirmedWrites (pack mongoDb) action
+    return ()
+
+insertSingleAction :: String -> ParsedProperty -> Mongo.Action IO ()
+insertSingleAction date property = Mongo.upsert (Mongo.select (existingPropertySelector date property) "properties") $ toPropertyDocument date property
+
+processSoldPropertiesDate :: String -> IO ()
+processSoldPropertiesDate date = do
+    allFiles <- listFiles $ "/reaSoldResults/" ++ date
+    let allSoldProperties = S.mapM soldFileToProperties $ S.each allFiles
+    let flattenedSoldPropertiesWithPrice = S.filter soldPropertyHasPrice $ S.concat allSoldProperties
+    pipe <- getAuthenticatedMongoPipe
+    let insertActions = S.map insertSingleSoldAction flattenedSoldPropertiesWithPrice
+    S.mapM_ (runMongoAction pipe) insertActions
+    Mongo.close pipe
+    print $ "Finished sold date " ++ date
+
+insertSingleSoldAction :: SoldParsedProperty -> Mongo.Action IO ()
+insertSingleSoldAction property = Mongo.upsert (Mongo.select (existingSoldPropertySelector property) "soldProperties") $ toSoldPropertyDocument property
 
 hasPrice :: ParsedProperty -> Bool
 hasPrice property = isJust (price property)
 
---144.95143536,-37.8555269395,144.990094688,-37.799716676
-
-hasGeocoding :: (ParsedProperty, Maybe LatLng) -> Bool
-hasGeocoding (_, Just coordinates) = isInMelbourne coordinates
-hasGeocoding (_, Nothing) = False
-
-isInMelbourne :: LatLng -> Bool
-isInMelbourne coordinates =
-    (pLat > -37.8555269395) && (pLat < -37.799716676) && (pLng > 144.95143536) && (pLng < 144.990094688)
-    where
-        pLat = lat coordinates
-        pLng = lng coordinates
+soldPropertyHasPrice :: SoldParsedProperty -> Bool
+soldPropertyHasPrice property = isJust (price (soldProperty property))
 
 openURL :: String -> IO String
 openURL x = getResponseBody =<< simpleHTTP (getRequest x)
-
-geocodeAddressesFake :: [ParsedProperty] -> IO (Maybe [(ParsedProperty, Maybe LatLng)])
-geocodeAddressesFake properties = do
-    _ <- print "Fake geocoding"
-    let fakeGeocoding = fmap (\p -> Just LatLng {lat = 1, lng =2}) properties
-    return $ Just (zip properties fakeGeocoding)
-
-geocodeAddresses :: [ParsedProperty] -> IO (Maybe [(ParsedProperty, Maybe LatLng)])
-geocodeAddresses properties = do
-    let addresses = fmap ((++ ", Australia") . location) properties
-    mapQuestKey <- getEnv "MAP_QUEST_KEY"
-    geocodeResponse <- openURL $ mapQuestUrl mapQuestKey addresses
-    let geocodeResults = geocodeResponseToResults geocodeResponse
-    _ <- printGeocoded geocodeResponse geocodeResults
-    return $ fmap (zip properties) geocodeResults
-
-printGeocoded :: String -> Maybe [Maybe LatLng] -> IO()
-printGeocoded response (Just results) = print $ "Got " ++ show (length results) ++ " geocoded results"
-printGeocoded response Nothing = print $ "Geocoding error " ++ response

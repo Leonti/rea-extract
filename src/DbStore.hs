@@ -8,31 +8,48 @@ import Data.Maybe
 import Database.SQLite.Simple
 import Database.SQLite.Simple.FromRow
 import Database.SQLite.Simple.ToRow
+import Data.Time
 
-test = "hello"
+import Database.MongoDB    (Action, Document, Document, Value, Selector, access,
+                            close, connect, delete, exclude, find,
+                            host, insertMany, master, project, rest,
+                            select, sort, (=:))
 
--- "CREATE TABLE properties (link TEXT, date TEXT, bedrooms INTEGER, bathrooms INTEGER, cars INTEGER, location TEXT, price INTEGER, lat REAL, lng REAL);"
+existingPropertySelector :: String -> ParsedProperty -> Selector
+existingPropertySelector date p =
+    [ "link" =: link p
+    , "extractedDate" =: date
+    ]
 
+toPropertyDocument :: String -> ParsedProperty -> Document
+toPropertyDocument date p =
+    [ "link" =: link p
+    , "extractedDate" =: date
+    , "bedrooms" =: bedrooms (details p)
+    , "bathrooms" =: bathrooms (details p)
+    , "cars" =: cars (details p)
+    , "location" =: location p
+    , "price" =: fromJust (price p)
+    ]
 
-data PropertyRow = PropertyRow String String Int Int Int String Int Double Double deriving (Show)
+formatDate :: LocalTime -> String
+formatDate = formatTime defaultTimeLocale "%Y-%m-%d"
 
-instance FromRow PropertyRow where
-    fromRow = PropertyRow <$> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field
+existingSoldPropertySelector :: SoldParsedProperty -> Selector
+existingSoldPropertySelector soldP =
+    [ "link" =: link (soldProperty soldP)
+    , "soldAt" =: formatDate (soldAt soldP)
+    ]
 
-instance ToRow PropertyRow where
-    toRow (PropertyRow link date bedrooms bathrooms cars location price lat lng) = toRow (link, date, bedrooms, bathrooms, cars, location, price, lat, lng)
-
-propertyRowInsertQuery :: Query
-propertyRowInsertQuery = "INSERT INTO properties (link, date, bedrooms, bathrooms, cars, location, price, lat, lng) VALUES (?,?,?,?,?,?,?,?,?)"
-
-propertiesForDate :: Query
-propertiesForDate = "SELECT * from properties where date=?"
-
-toPropertyRow :: String -> (ParsedProperty, LatLng) -> PropertyRow
-toPropertyRow date (p, latLng) =
-    PropertyRow (link p) date pBedrooms pBathrooms pCars (location p) propertyPrice (lat latLng) (lng latLng)
+toSoldPropertyDocument :: SoldParsedProperty -> Document
+toSoldPropertyDocument soldP =
+    [ "link" =: link p
+    , "soldAt" =: formatDate (soldAt soldP)
+    , "bedrooms" =: bedrooms (details p)
+    , "bathrooms" =: bathrooms (details p)
+    , "cars" =: cars (details p)
+    , "location" =: location p
+    , "price" =: fromJust (price p)
+    ]
     where
-        propertyPrice = fromJust (price p)
-        pBedrooms = bedrooms (details p)
-        pBathrooms = bathrooms (details p)
-        pCars = cars (details p)
+        p = soldProperty soldP

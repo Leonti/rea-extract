@@ -31,6 +31,7 @@ library
                         , MissingH == 1.4.0.1
                         , strptime == 1.0.10
                         , streaming == 0.1.4.3
+                        , mongoDB == 2.3.0
 
 executable rea-extract
   hs-source-dirs:      src
@@ -55,6 +56,7 @@ executable rea-extract
                         , MissingH == 1.4.0.1
                         , strptime == 1.0.10
                         , streaming == 0.1.4.3
+                        , mongoDB == 2.3.0
 
 test-suite hspec
   main-is: Spec.hs
