@@ -7,12 +7,15 @@ for i in *; do
     rm "$i"
 done
 
-aws s3 cp s3://leonti-rea-crawler/properties.db /root/properties.db
+cd /root/reaSoldResults
+
+for i in *; do
+    unzip "$i"
+    rm "$i"
+done
 
 cd /root
 ./rea-extract &> output.txt
-
-aws s3 cp /root/properties.db s3://leonti-rea-crawler/properties.db
 
 output=$(cat output.txt)
 
