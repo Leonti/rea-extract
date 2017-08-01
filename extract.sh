@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 
-current_date=$(date +"%y-%-m-%-d")
+current_date=$(date +"%Y-%-m-%-d")
 
 mkdir /root/reaResults
 cd /root/reaResults
