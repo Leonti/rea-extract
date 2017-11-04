@@ -32,6 +32,7 @@ library
                         , strptime == 1.0.10
                         , streaming == 0.1.4.3
                         , mongoDB == 2.3.0
+                        , spawn == 0.3
 
 executable rea-extract
   hs-source-dirs:      src

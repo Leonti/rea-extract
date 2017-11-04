@@ -30,6 +30,7 @@ import Database.SQLite.Simple
 import Streaming
 import qualified Streaming.Prelude as S
 import qualified Database.MongoDB as Mongo
+import Control.Concurrent.Spawn(pool, parMapIO)
 
 listFiles :: String -> IO [FilePath]
 listFiles folder = do
@@ -57,22 +58,23 @@ parseSingleSoldPage = do
 
 main :: IO ()
 main = do
+    wrap <- pool 100
     homeDirectory <- getHomeDirectory
     dates <- listDirectory $ homeDirectory ++ "/reaResults"
     soldDates <- listDirectory $ homeDirectory ++ "/reaSoldResults"
-    _ <- sequence_ $ fmap processDate dates
-    _ <- sequence_ $ fmap processSoldPropertiesDate soldDates
+    pipe <- getAuthenticatedMongoPipe
+    _ <- parMapIO (wrap . (processDate pipe)) dates
+    _ <- parMapIO (wrap . (processSoldPropertiesDate pipe)) soldDates
+    Mongo.close pipe
     print "Done"
 
-processDate :: String -> IO ()
-processDate date = do
+processDate :: Mongo.Pipe -> String -> IO ()
+processDate pipe date = do
     allFiles <- listFiles $ "/reaResults/" ++ date
     let allProperties = S.mapM fileToProperties $ S.each allFiles
     let flattenedPropertiesWithPrice = S.filter hasPrice $ S.concat allProperties
-    pipe <- getAuthenticatedMongoPipe
     let insertActions = S.map (insertSingleAction date) flattenedPropertiesWithPrice
     S.mapM_ (runMongoAction pipe) insertActions
-    Mongo.close pipe
     print $ "Finished date " ++ date
 
 getAuthenticatedMongoPipe :: IO Mongo.Pipe
@@ -94,15 +96,13 @@ runMongoAction pipe action = do
 insertSingleAction :: String -> ParsedProperty -> Mongo.Action IO ()
 insertSingleAction date property = Mongo.upsert (Mongo.select (existingPropertySelector date property) "properties") $ toPropertyDocument date property
 
-processSoldPropertiesDate :: String -> IO ()
-processSoldPropertiesDate date = do
+processSoldPropertiesDate :: Mongo.Pipe -> String -> IO ()
+processSoldPropertiesDate pipe date = do
     allFiles <- listFiles $ "/reaSoldResults/" ++ date
     let allSoldProperties = S.mapM soldFileToProperties $ S.each allFiles
     let flattenedSoldPropertiesWithPrice = S.filter soldPropertyHasPrice $ S.concat allSoldProperties
-    pipe <- getAuthenticatedMongoPipe
     let insertActions = S.map insertSingleSoldAction flattenedSoldPropertiesWithPrice
     S.mapM_ (runMongoAction pipe) insertActions
-    Mongo.close pipe
     print $ "Finished sold date " ++ date
 
 insertSingleSoldAction :: SoldParsedProperty -> Mongo.Action IO ()
