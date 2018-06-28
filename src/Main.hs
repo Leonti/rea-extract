@@ -2,51 +2,49 @@
 
 module Main where
 
-import Data.Char
-import Network.HTTP
-import Text.HTML.TagSoup
-import Text.Regex.TDFA
-import Data.Maybe
-import Control.Concurrent
-import Data.Text
+import           Control.Concurrent
+import           Data.Char
+import           Data.Maybe
+import           Data.Text          hiding (filter)
+import           Network.HTTP
+import           Text.HTML.TagSoup
+import           Text.Regex.TDFA
 
-import System.IO
-import Control.Monad
+import           Control.Monad
+import           System.IO
 
-import Data.Time.Clock
-import Data.Time.Calendar
+import           Data.Time.Calendar
+import           Data.Time.Clock
 
-import System.Environment
-import System.Directory
+import           System.Directory
+import           System.Environment
+import           System.FilePath    ((</>))
 
-import Models
-import ResultsParsing
-import SoldResultsParsing
-import Geocoding
-import DbStore
+import           DbStore
+import           Geocoding
+import           Models
+import           ResultsParsing
+import           SoldResultsParsing
 
-import Database.SQLite.Simple
-
-import Streaming
-import qualified Streaming.Prelude as S
-import qualified Database.MongoDB as Mongo
+import qualified Database.MongoDB   as Mongo
+import           Streaming
+import qualified Streaming.Prelude  as S
 
 listFiles :: String -> IO [FilePath]
 listFiles folder = do
     homeDirectory <- getHomeDirectory
     let resultsFolder = homeDirectory ++ folder
     files <- listDirectory resultsFolder
-    return $ fmap (\file -> resultsFolder ++ "/" ++ file) files
+    filesOnly <- filterM (\d -> doesFileExist (resultsFolder </> d)) (filter (/= ".DS_Store") files)
+    return $ fmap (resultsFolder </>) filesOnly
 
 fileToProperties :: FilePath -> IO [ParsedProperty]
-fileToProperties path = do
-    contents <- readFile path
-    return $ parsePage contents
+fileToProperties path =
+    parsePage <$> readFile path
 
 soldFileToProperties :: FilePath -> IO [SoldParsedProperty]
-soldFileToProperties path = do
-    contents <- readFile path
-    return $ parseSoldPage contents
+soldFileToProperties path =
+    parseSoldPage <$> readFile path
 
 parseSingleSoldPage :: IO ()
 parseSingleSoldPage = do
@@ -58,10 +56,12 @@ parseSingleSoldPage = do
 main :: IO ()
 main = do
     homeDirectory <- getHomeDirectory
-    dates <- listDirectory $ homeDirectory ++ "/reaResults"
-    soldDates <- listDirectory $ homeDirectory ++ "/reaSoldResults"
-    _ <- sequence_ $ fmap processDate dates
-    _ <- sequence_ $ fmap processSoldPropertiesDate soldDates
+    dates <- listDirectory (homeDirectory </> "reaResults")
+    folderDates <- filterM (\d -> doesDirectoryExist (homeDirectory </> "reaResults" </> d)) dates
+    soldDates <- listDirectory (homeDirectory </> "reaSoldResults")
+    folderSoldDates <- filterM (\d -> doesDirectoryExist (homeDirectory </> "reaSoldResults" </> d)) soldDates
+    _ <- sequence_ $ fmap processDate folderDates
+    _ <- sequence_ $ fmap processSoldPropertiesDate folderSoldDates
     print "Done"
 
 processDate :: String -> IO ()

@@ -2,18 +2,15 @@
 
 module DbStore where
 
-import Models
-import Geocoding
-import Data.Maybe
-import Database.SQLite.Simple
-import Database.SQLite.Simple.FromRow
-import Database.SQLite.Simple.ToRow
-import Data.Time
+import           Data.Maybe
+import           Data.Time
+import           Geocoding
+import           Models
 
-import Database.MongoDB    (Action, Document, Document, Value, Selector, access,
-                            close, connect, delete, exclude, find,
-                            host, insertMany, master, project, rest,
-                            select, sort, (=:))
+import           Database.MongoDB (Action, Document, Document, Selector, Value,
+                                   access, close, connect, delete, exclude,
+                                   find, host, insertMany, master, project,
+                                   rest, select, sort, (=:))
 
 existingPropertySelector :: String -> ParsedProperty -> Selector
 existingPropertySelector date p =
