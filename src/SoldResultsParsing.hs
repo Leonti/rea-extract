@@ -60,7 +60,7 @@ extractPropertyLink tree =
     fromAttrib "href" tagOpenA
     where
         linkTree :: [TagTreePos String]
-        linkTree = select (sel "a.property-card__link") (content tree)
+        linkTree = select (sel "a.residential-card__link") (content tree)
 
         tagOpenA :: Tag String
         tagOpenA = head $ flattenTree [content $ head linkTree]
@@ -68,7 +68,7 @@ extractPropertyLink tree =
 extractDate :: TagTreePos String -> Maybe LocalTime
 extractDate propertyTree = toDate dateTag
     where
-        dateTag = head $ select (sel ".property-card__with-comma") (content propertyTree)
+        dateTag = head $ select (sel ".residential-card__with-comma") (content propertyTree)
 
 extractPropertyDetails :: TagTreePos String -> PropertyDetails
 extractPropertyDetails propertyTree =
@@ -95,7 +95,7 @@ addressFromListingTree listingTree =
     head streetAddresses
     where
         addressTrees :: [TagTreePos String]
-        addressTrees = select (sel "a.property-card__info-text") (content listingTree)
+        addressTrees = select (sel "a.residential-card__info-text") (content listingTree)
 
         streetAddresses :: [String]
         streetAddresses = fmap streetFromAddressTree addressTrees
@@ -116,7 +116,7 @@ toDate tree = fmap fst maybeParsedDate
         maybeParsedDate = strptime "%d %b %Y" dateAsString
 
 soldListings :: TagTree String -> [TagTreePos String]
-soldListings = select (sel "article.property-card")
+soldListings = select (sel "article.residential-card")
 
 hasProperies :: TagTree String -> Bool
-hasProperies tree = not (null (select (sel ".property-card__with-comma") tree))
+hasProperies tree = not (null (select (sel ".residential-card__with-comma") tree))

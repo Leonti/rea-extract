@@ -23,7 +23,7 @@ library
                         , text == 1.2.3.0
                         , time == 1.8.0.4
                         , directory == 1.3.3.0
-                        , filepath == 1.4.1.2                        
+                        , filepath == 1.4.1.2
                         , aeson == 1.3.0.0
                         , utf8-string == 1.0.1.1
                         , split == 0.2.3.3
@@ -32,6 +32,7 @@ library
                         , strptime == 1.0.10
                         , streaming == 0.2.1.0
                         , mongoDB == 2.3.0.5
+                        , spawn == 0.3
 
 executable rea-extract
   hs-source-dirs:      src
@@ -57,6 +58,7 @@ executable rea-extract
                       , strptime == 1.0.10
                       , streaming == 0.2.1.0
                       , mongoDB == 2.3.0.5
+                      , spawn == 0.3
 
 test-suite hspec
   main-is: Spec.hs
