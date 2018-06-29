@@ -21,7 +21,6 @@ import           System.Environment
 import           System.FilePath          ((</>))
 
 import           DbStore
-import           Geocoding
 import           Models
 import           ResultsParsing
 import           SoldResultsParsing

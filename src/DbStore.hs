@@ -4,7 +4,6 @@ module DbStore where
 
 import           Data.Maybe
 import           Data.Time
-import           Geocoding
 import           Models
 
 import           Database.MongoDB (Action, Document, Document, Selector, Value,
