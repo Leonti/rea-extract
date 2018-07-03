@@ -44,6 +44,9 @@ executable rea-extract
   other-modules:         DbStore
                        , PriceParsing
                        , ResultsParsing
+                       , Models
+                       , ParsingUtils
+                       , SoldResultsParsing
   build-depends:       base >= 4.7 && < 5
                       , tagsoup == 0.13.10
                       , HTTP == 4000.3.12
