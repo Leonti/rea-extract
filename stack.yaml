@@ -19,6 +19,7 @@ extra-deps:
 - HTTP-4000.3.12
 - regex-tdfa-1.2.3.1
 - spawn-0.3
+- transformers-0.5.5.0
 # Override default flag values for local packages and extra-deps
 flags: {}
 

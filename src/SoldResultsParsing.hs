@@ -1,35 +1,39 @@
 module SoldResultsParsing where
 
-import Text.HTML.TagSoup
-import Text.HTML.TagSoup.Tree
-import Text.HTML.TagSoup.Tree.Selection
-import Data.List.Split
-import Data.List
-import Text.CSS3.Selectors.Parser
-import Text.HTML.TagSoup.Tree.Zipper
-import Text.CSS3.Selectors.Syntax
-import Data.Maybe
-import Text.Read
-import Models
-import Data.String.Utils
-import Data.Time.Parse
-import Data.Time.LocalTime
-import ParsingUtils
-import PriceParsing (parsePrice)
+import           Data.List
+import           Data.List.Split
+import           Data.Maybe
+import           Data.String.Utils
+import           Data.Time.LocalTime
+import           Data.Time.Parse
+import           Data.Validation
+import           Models
+import           ParsingUtils
+import           PriceParsing                     (parsePrice)
+import           Safe                             (headMay)
+import           Text.CSS3.Selectors.Parser
+import           Text.CSS3.Selectors.Syntax
+import           Text.HTML.TagSoup
+import           Text.HTML.TagSoup.Tree
+import           Text.HTML.TagSoup.Tree.Selection
+import           Text.HTML.TagSoup.Tree.Zipper
+import           Text.Read
 
-parseSoldPage :: String -> [SoldParsedProperty]
-parseSoldPage content =
-    fromMaybe [] maybeProperties
+parseSoldPage :: String -> Either Error [SoldParsedProperty]
+parseSoldPage content = do
+  listingTrees <- Right $ maybe [] soldListings maybeBodyTree
+  traverse parseSoldListing listingTrees
     where
         tagTree = parseTree content
         maybeBodyTree = find hasProperies tagTree
         maybeListingTrees = fmap soldListings maybeBodyTree
-        maybeProperties = fmap (fmap parseSoldListing) maybeListingTrees
 
-
-parseSoldListing :: TagTreePos String -> SoldParsedProperty
-parseSoldListing listingTree =
-    SoldParsedProperty
+parseSoldListing :: TagTreePos String -> Either Error SoldParsedProperty
+parseSoldListing listingTree = do
+  propertyDetails <- extractPropertyDetails listingTree
+  link <- extractPropertyLink listingTree
+  address <- addressFromListingTree listingTree
+  return SoldParsedProperty
         { soldProperty = ParsedProperty
             { details = propertyDetails
             , location = address
@@ -40,62 +44,54 @@ parseSoldListing listingTree =
         , soldAt = fromJust maybeLocalTime
         }
     where
-        address :: String
-        address = addressFromListingTree listingTree
-
-        propertyDetails :: PropertyDetails
-        propertyDetails = extractPropertyDetails listingTree
-
         maybePrice :: Maybe Int
         maybePrice = extractPrice ".property-price" listingTree >>= parsePrice
 
         maybeLocalTime :: Maybe LocalTime
         maybeLocalTime = extractDate listingTree
 
-        link :: String
-        link = extractPropertyLink listingTree
+maybeToEither :: Error -> Maybe a2 -> Either Error a2
+maybeToEither = flip maybe Right . Left
 
-extractPropertyLink :: TagTreePos String -> String
+extractPropertyLink :: TagTreePos String -> Either Error String
 extractPropertyLink tree =
-    fromAttrib "href" tagOpenA
+    fromAttrib "href" <$> tagOpenA
     where
-        linkTree :: [TagTreePos String]
-        linkTree = select (sel "a.residential-card__link") (content tree)
-
-        tagOpenA :: Tag String
-        tagOpenA = head $ flattenTree [content $ head linkTree]
+      tagOpenA = maybeToEither "Card link is empty" $ do
+        link <- headMay (select (sel "a.residential-card__details-link") (content tree))
+        headMay $ flattenTree [content link]
 
 extractDate :: TagTreePos String -> Maybe LocalTime
-extractDate propertyTree = toDate dateTag
-    where
-        dateTag = head $ select (sel ".residential-card__with-comma") (content propertyTree)
+extractDate propertyTree = do
+  dateTag <- headMay $ select (sel ".residential-card__with-comma") (content propertyTree)
+  toDate dateTag
 
-extractPropertyDetails :: TagTreePos String -> PropertyDetails
+extractPropertyDetails :: TagTreePos String -> Either Error PropertyDetails
 extractPropertyDetails propertyTree =
-    PropertyDetails
-        { bedroomsAsString = bedroomsAsString
-        , bathroomsAsString = bathroomsAsString
-        , carsAsString = carsAsString
-        , bedrooms = detailToInt bedroomsAsString
-        , bathrooms = detailToInt bathroomsAsString
-        , cars = detailToInt carsAsString
-        }
+  return PropertyDetails
+    { bedroomsAsString = bedroomsAsString
+    , bathroomsAsString = bathroomsAsString
+    , carsAsString = carsAsString
+    , bedrooms = fromMaybe 0 $ bedroomsAsString >>= readMaybe
+    , bathrooms = fromMaybe 0 $ bathroomsAsString >>= readMaybe
+    , cars = fromMaybe 0 $ carsAsString >>= readMaybe
+    }
     where
-        bedroomsAsString = iconToValue $ select (sel ".general-features__beds") (content propertyTree)
-        bathroomsAsString = iconToValue $ select (sel ".general-features__baths") (content propertyTree)
-        carsAsString = iconToValue $ select (sel ".general-features__cars") (content propertyTree)
+      bedroomsAsString = iconToValue $ select (sel ".general-features__beds") (content propertyTree)
+      bathroomsAsString = iconToValue $ select (sel ".general-features__baths") (content propertyTree)
+      carsAsString = iconToValue $ select (sel ".general-features__cars") (content propertyTree)
 
 iconToValue :: [TagTreePos String] -> Maybe String
 iconToValue [] = Nothing
 iconToValue (x:xs) =
     Just $ innerText $ flattenTree [content x]
 
-addressFromListingTree :: TagTreePos String -> String
+addressFromListingTree :: TagTreePos String -> Either Error String
 addressFromListingTree listingTree =
-    head streetAddresses
+    maybeToEither "Can't extract address" $ headMay streetAddresses
     where
         addressTrees :: [TagTreePos String]
-        addressTrees = select (sel "a.residential-card__info-text") (content listingTree)
+        addressTrees = select (sel ".residential-card__info-text span") (content listingTree)
 
         streetAddresses :: [String]
         streetAddresses = fmap streetFromAddressTree addressTrees

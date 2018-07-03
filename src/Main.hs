@@ -5,7 +5,7 @@ module Main where
 import           Control.Concurrent
 import           Data.Char
 import           Data.Maybe
-import           Data.Text                hiding (filter)
+import           Data.Text                  hiding (filter)
 import           Network.HTTP
 import           Text.HTML.TagSoup
 import           Text.Regex.TDFA
@@ -18,17 +18,19 @@ import           Data.Time.Clock
 
 import           System.Directory
 import           System.Environment
-import           System.FilePath          ((</>))
+import           System.FilePath            ((</>))
 
 import           DbStore
 import           Models
 import           ResultsParsing
 import           SoldResultsParsing
 
-import           Control.Concurrent.Spawn (parMapIO, pool)
-import qualified Database.MongoDB         as Mongo
+import           Control.Concurrent.Spawn   (parMapIO, pool)
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Except
+import qualified Database.MongoDB           as Mongo
 import           Streaming
-import qualified Streaming.Prelude        as S
+import qualified Streaming.Prelude          as S
 
 listFiles :: String -> IO [FilePath]
 listFiles folder = do
@@ -38,13 +40,13 @@ listFiles folder = do
     filesOnly <- filterM (\d -> doesFileExist (resultsFolder </> d)) (filter (/= ".DS_Store") files)
     return $ fmap (resultsFolder </>) filesOnly
 
-fileToProperties :: FilePath -> IO [ParsedProperty]
+fileToProperties :: FilePath -> ExceptT Error IO [ParsedProperty]
 fileToProperties path =
-    parsePage <$> readFile path
+    ExceptT $ parsePage <$> readFile path
 
-soldFileToProperties :: FilePath -> IO [SoldParsedProperty]
+soldFileToProperties :: FilePath -> ExceptT Error IO [SoldParsedProperty]
 soldFileToProperties path =
-    parseSoldPage <$> readFile path
+    ExceptT $ parseSoldPage <$> readFile path
 
 parseSingleSoldPage :: IO ()
 parseSingleSoldPage = do
@@ -62,8 +64,8 @@ main = do
     soldDates <- listDirectory (homeDirectory </> "reaSoldResults")
     folderSoldDates <- filterM (\d -> doesDirectoryExist (homeDirectory </> "reaSoldResults" </> d)) soldDates
     pipe <- getAuthenticatedMongoPipe
-    _ <- parMapIO (wrap . (processDate pipe)) folderDates
-    _ <- parMapIO (wrap . (processSoldPropertiesDate pipe)) folderSoldDates
+    _ <- parMapIO (wrap . processDate pipe) folderDates
+    _ <- parMapIO (wrap . processSoldPropertiesDate pipe) folderSoldDates
     Mongo.close pipe
     print "Done"
 
@@ -73,8 +75,8 @@ processDate pipe date = do
     let allProperties = S.mapM fileToProperties $ S.each allFiles
     let flattenedPropertiesWithPrice = S.filter hasPrice $ S.concat allProperties
     let insertActions = S.map (insertSingleAction date) flattenedPropertiesWithPrice
-    S.mapM_ (runMongoAction pipe) insertActions
-    print $ "Finished date " ++ date
+    result <- runExceptT $ S.mapM_ (liftIO . runMongoAction pipe) insertActions
+    print $ "Finished date " ++ date ++ " with " ++ show result
 
 getAuthenticatedMongoPipe :: IO Mongo.Pipe
 getAuthenticatedMongoPipe = do
@@ -101,8 +103,8 @@ processSoldPropertiesDate pipe date = do
     let allSoldProperties = S.mapM soldFileToProperties $ S.each allFiles
     let flattenedSoldPropertiesWithPrice = S.filter soldPropertyHasPrice $ S.concat allSoldProperties
     let insertActions = S.map insertSingleSoldAction flattenedSoldPropertiesWithPrice
-    S.mapM_ (runMongoAction pipe) insertActions
-    print $ "Finished sold date " ++ date
+    result <- runExceptT $ S.mapM_ (liftIO . runMongoAction pipe) insertActions
+    print $ "Finished sold date " ++ date ++ " with " ++ show result
 
 insertSingleSoldAction :: SoldParsedProperty -> Mongo.Action IO ()
 insertSingleSoldAction property = Mongo.upsert (Mongo.select (existingSoldPropertySelector property) "soldProperties") $ toSoldPropertyDocument property

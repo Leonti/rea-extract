@@ -1,38 +1,36 @@
 module ResultsParsing where
 
-import Text.HTML.TagSoup
-import Text.HTML.TagSoup.Tree
-import Text.HTML.TagSoup.Tree.Selection
-import Data.List.Split
-import Data.List
-import Text.CSS3.Selectors.Parser
-import Text.HTML.TagSoup.Tree.Zipper
-import Text.CSS3.Selectors.Syntax
-import Data.Maybe
-import Text.Read
-import PriceParsing (parsePrice)
-import Models
-import ParsingUtils
+import           Data.List
+import           Data.List.Split
+import           Data.Maybe
+import           Models
+import           ParsingUtils
+import           PriceParsing                     (parsePrice)
+import           Text.CSS3.Selectors.Parser
+import           Text.CSS3.Selectors.Syntax
+import           Text.HTML.TagSoup
+import           Text.HTML.TagSoup.Tree
+import           Text.HTML.TagSoup.Tree.Selection
+import           Text.HTML.TagSoup.Tree.Zipper
+import           Text.Read
 
-parsePage :: String -> [ParsedProperty]
-parsePage content =
-    fromMaybe [] maybeProperties
+parsePage :: String -> Either Error [ParsedProperty]
+parsePage content = do
+  listingTrees <- Right $ maybe [] listings maybeBodyTree
+  nestedProperties <- traverse parseListing listingTrees
+  return $ concat nestedProperties
     where
         tagTree = parseTree content
         maybeBodyTree = find hasListings tagTree
         maybeListingTrees = fmap listings maybeBodyTree
-        maybeProperties = fmap (concatMap parseListing) maybeListingTrees
 
-
-parseListing :: TagTreePos String -> [ParsedProperty]
-parseListing listingTree =
-    fmap (`combineData` address) details
+parseListing :: TagTreePos String -> Either Error [ParsedProperty]
+parseListing listingTree = do
+  details <- detailsFromListingTree listingTree
+  return $ fmap (`combineData` address) details
     where
         address :: String
         address = addressFromListingTree listingTree
-
-        details :: [(PropertyDetails, Maybe String, String)]
-        details = detailsFromListingTree listingTree
 
         combineData :: (PropertyDetails, Maybe String, String) -> String -> ParsedProperty
         combineData (propertyDetails, maybePriceAsText, link) address =
@@ -57,74 +55,72 @@ addressFromListingTree listingTree =
         streetAddresses :: [String]
         streetAddresses = fmap streetFromAddressTree addressTrees
 
-extractPropertyDetails :: TagTreePos String -> PropertyDetails
-extractPropertyDetails propertyTree =
-    PropertyDetails
-        { bedroomsAsString = bedroomsAsString
-        , bathroomsAsString = bathroomsAsString
-        , carsAsString = carsAsString
-        , bedrooms = detailToInt bedroomsAsString
-        , bathrooms = detailToInt bathroomsAsString
-        , cars = detailToInt carsAsString
-        }
-    where
-        bedroomsAsString = iconToValue $ select (sel ".rui-icon-bed") (content propertyTree)
-        bathroomsAsString = iconToValue $ select (sel ".rui-icon-bath") (content propertyTree)
-        carsAsString = iconToValue $ select (sel ".rui-icon-car") (content propertyTree)
+maybeToEither :: Error -> Maybe a2 -> Either Error a2
+maybeToEither = flip maybe Right . Left
+
+extractPropertyDetails :: TagTreePos String -> Either Error PropertyDetails
+extractPropertyDetails propertyTree = do
+  bedrooms <- maybeToEither "Can't parse bedrooms" $ bedroomsAsString >>= readMaybe
+  bathrooms <- maybeToEither "Can't parse bathrooms" $ bathroomsAsString >>= readMaybe
+  cars <- maybeToEither "Can't parse cars" $ carsAsString >>= readMaybe
+  return PropertyDetails
+      { bedroomsAsString = bedroomsAsString
+      , bathroomsAsString = bathroomsAsString
+      , carsAsString = carsAsString
+      , bedrooms = bedrooms
+      , bathrooms = bathrooms
+      , cars = cars
+      }
+  where
+      bedroomsAsString = iconToValue $ select (sel ".rui-icon-bed") (content propertyTree)
+      bathroomsAsString = iconToValue $ select (sel ".rui-icon-bath") (content propertyTree)
+      carsAsString = iconToValue $ select (sel ".rui-icon-car") (content propertyTree)
 
 iconToValue :: [TagTreePos String] -> Maybe String
 iconToValue [] = Nothing
 iconToValue (x:xs) =
     Just $ innerText $ flattenTree [Text.HTML.TagSoup.Tree.Zipper.after x !! 1]
 
-detailsFromListingTree :: TagTreePos String -> [(PropertyDetails, Maybe String, String)]
+detailsFromListingTree :: TagTreePos String -> Either Error [(PropertyDetails, Maybe String, String)]
 detailsFromListingTree listingTree =
     extractedDetails
     where
         projectChildTrees :: [TagTreePos String]
         projectChildTrees = select (sel "div.project-child-listings") (content listingTree)
 
-        extractedDetails :: [(PropertyDetails, Maybe String, String)]
+        extractedDetails :: Either Error [(PropertyDetails, Maybe String, String)]
         extractedDetails = if not (null projectChildTrees) then
                 processProjectChildren $ head projectChildTrees
             else
-                [processSingleProperty listingTree]
+                traverse processSingleProperty [listingTree]
 
-processSingleProperty :: TagTreePos String -> (PropertyDetails, Maybe String, String)
-processSingleProperty propertyTree =
-    (propertyDetails, propertyPrice, propertyLink)
+processSingleProperty :: TagTreePos String -> Either Error (PropertyDetails, Maybe String, String)
+processSingleProperty propertyTree = do
+  propertyDetails <- extractPropertyDetails propertyTree
+  return (propertyDetails, propertyPrice, propertyLink)
     where
-        propertyDetails :: PropertyDetails
-        propertyDetails = extractPropertyDetails propertyTree
-
         propertyPrice :: Maybe String
         propertyPrice = extractSinglePropertyPrice propertyTree
 
         propertyLink :: String
         propertyLink = extractSinglePropertyLink propertyTree
 
-processProjectChildren :: TagTreePos String -> [(PropertyDetails, Maybe String, String)]
-processProjectChildren projectChildTree =
-    processedProjectChildren
+processProjectChildren :: TagTreePos String -> Either Error [(PropertyDetails, Maybe String, String)]
+processProjectChildren projectChildTree = traverse processProjectChild childrenTrees
     where
         childrenTrees :: [TagTreePos String]
         childrenTrees = select (sel "div.child") (content projectChildTree)
 
-        processedProjectChildren :: [(PropertyDetails, Maybe String, String)]
-        processedProjectChildren = fmap processProjectChild childrenTrees
+processProjectChild :: TagTreePos String -> Either Error (PropertyDetails, Maybe String, String)
+processProjectChild projectChild = do
+  propertyDetails <- extractPropertyDetails projectChild
+  return (propertyDetails, propertyPrice, propertyLink)
+  where
+      propertyPrice :: Maybe String
+      propertyPrice = extractProjectChildPrice projectChild
 
-processProjectChild :: TagTreePos String -> (PropertyDetails, Maybe String, String)
-processProjectChild projectChild =
-    (propertyDetails, propertyPrice, propertyLink)
-    where
-        propertyDetails :: PropertyDetails
-        propertyDetails = extractPropertyDetails projectChild
-
-        propertyPrice :: Maybe String
-        propertyPrice = extractProjectChildPrice projectChild
-
-        propertyLink :: String
-        propertyLink = extractProjectChildLink projectChild
+      propertyLink :: String
+      propertyLink = extractProjectChildLink projectChild
 
 extractProjectChildPrice :: TagTreePos String -> Maybe String
 extractProjectChildPrice = extractPrice ".price"
