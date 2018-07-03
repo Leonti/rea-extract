@@ -42,7 +42,6 @@ executable rea-extract
   main-is:             Main.hs
   default-language:    Haskell2010
   other-modules:         DbStore
-                       , Geocoding
                        , PriceParsing
                        , ResultsParsing
   build-depends:       base >= 4.7 && < 5
