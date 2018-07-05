@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
 
 
-current_date=$(date +"%Y-%-m-%-d")
+if [ -z "$DATE" ]; then
+  echo "DATE is not provided, using current date"
+  extract_date=$(date +"%Y-%-m-%-d")
+else
+  echo "Extracting values for date '$DATE'"
+  extract_date=$DATE
+fi
+
+
 
 mkdir /root/reaResults
 cd /root/reaResults
 
-aws s3 cp "s3://leonti-rea-crawler/"$current_date".zip" .
+aws s3 cp "s3://leonti-rea-crawler/"$extract_date".zip" .
 
 for i in *; do
     unzip "$i"
@@ -16,7 +24,7 @@ done
 mkdir /root/reaSoldResults
 cd /root/reaSoldResults
 
-aws s3 cp "s3://leonti-rea-crawler/"$current_date"-sold.zip" .
+aws s3 cp "s3://leonti-rea-crawler/"$extract_date"-sold.zip" .
 
 for i in *; do
     unzip "$i"
