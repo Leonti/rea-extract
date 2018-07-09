@@ -3,6 +3,7 @@ RUN apt-get update && \
     apt-get install -y ca-certificates && \
     apt-get install -y libgnutls30 && \
     apt-get install -y netbase && \
+    apt-get install -y unzip curl && \
     apt-get -y autoremove && \
     apt-get -y clean && \
     rm -rf /var/lib/apt/lists/* && \
