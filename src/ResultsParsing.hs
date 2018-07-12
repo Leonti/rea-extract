@@ -60,16 +60,14 @@ maybeToEither = flip maybe Right . Left
 
 extractPropertyDetails :: TagTreePos String -> Either Error PropertyDetails
 extractPropertyDetails propertyTree = do
-  bedrooms <- maybeToEither "Can't parse bedrooms" $ bedroomsAsString >>= readMaybe
-  bathrooms <- maybeToEither "Can't parse bathrooms" $ bathroomsAsString >>= readMaybe
-  cars <- maybeToEither "Can't parse cars" $ carsAsString >>= readMaybe
+  bathrooms <- maybeToEither ("Can't parse bathrooms " ++ show (content propertyTree)) $ bathroomsAsString >>= readMaybe
   return PropertyDetails
       { bedroomsAsString = bedroomsAsString
       , bathroomsAsString = bathroomsAsString
       , carsAsString = carsAsString
-      , bedrooms = bedrooms
+      , bedrooms = fromMaybe 0 (bedroomsAsString >>= readMaybe)
       , bathrooms = bathrooms
-      , cars = cars
+      , cars = fromMaybe 0 (carsAsString >>= readMaybe)
       }
   where
       bedroomsAsString = iconToValue $ select (sel ".rui-icon-bed") (content propertyTree)
