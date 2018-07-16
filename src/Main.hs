@@ -74,9 +74,10 @@ processDate pipe date = do
     allFiles <- listFiles $ "/reaResults/" ++ date
     let allProperties = S.mapM fileToProperties $ S.each allFiles
     let flattenedPropertiesWithPrice = S.filter hasPrice $ S.concat allProperties
+    propertiesCount <- fmap (fst . lazily) <$> runExceptT (S.length flattenedPropertiesWithPrice)
     let insertActions = S.map (insertSingleAction date) flattenedPropertiesWithPrice
     result <- runExceptT $ S.mapM_ (liftIO . runMongoAction pipe) insertActions
-    print $ "Finished date " ++ date ++ " with " ++ show result
+    print $ "Finished date " ++ date ++ " with " ++ show result ++ " " ++ show propertiesCount
 
 getAuthenticatedMongoPipe :: IO Mongo.Pipe
 getAuthenticatedMongoPipe = do
@@ -102,9 +103,10 @@ processSoldPropertiesDate pipe date = do
     allFiles <- listFiles $ "/reaSoldResults/" ++ date
     let allSoldProperties = S.mapM soldFileToProperties $ S.each allFiles
     let flattenedSoldPropertiesWithPrice = S.filter soldPropertyHasPrice $ S.concat allSoldProperties
+    propertiesCount <- fmap (fst . lazily) <$> runExceptT (S.length flattenedSoldPropertiesWithPrice)
     let insertActions = S.map insertSingleSoldAction flattenedSoldPropertiesWithPrice
     result <- runExceptT $ S.mapM_ (liftIO . runMongoAction pipe) insertActions
-    print $ "Finished sold date " ++ date ++ " with " ++ show result
+    print $ "Finished sold date " ++ date ++ " with " ++ show result ++ " " ++ show propertiesCount
 
 insertSingleSoldAction :: SoldParsedProperty -> Mongo.Action IO ()
 insertSingleSoldAction property = Mongo.upsert (Mongo.select (existingSoldPropertySelector property) "soldProperties") $ toSoldPropertyDocument property
